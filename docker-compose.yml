@@ -1,0 +1,33 @@
+services:
+  banner-service:
+    container_name: banner-service
+    build: ./
+    command: ./banner-service
+    environment:
+      RUN_ADDR: ":3000"
+      LOG_LEVEL: INFO
+      STORAGE_PATH: postgres://avito_user:avito_pass@postgres:5432/banner_db?sslmode=disable
+    restart: always
+    ports:
+    - 3000:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    container_name: postgres
+    image: postgres:14.3-alpine
+    environment:
+      POSTGRES_DB: banner_db
+      PGDATABASE: banner_db
+      POSTGRES_USER: avito_user
+      PGUSER: avito_user
+      POSTGRES_PASSWORD: avito_pass
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready", "-d", "banner_db" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports: 
+    - 5436:5432
+    restart: always 
