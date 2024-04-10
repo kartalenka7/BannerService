@@ -1,10 +1,11 @@
 package model
 
 type BannersFilter struct {
-	FeatureId int
-	TagId     int
-	Limit     int
-	Offset    int
+	FeatureId       int
+	TagId           int
+	Limit           int
+	Offset          int
+	UseLastRevision bool
 }
 
 type BannerUpdateRequest struct {

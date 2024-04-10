@@ -18,7 +18,7 @@ var (
 		CREATE TABLE IF NOT EXISTS banners(
 		banner_id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
 		tags_group_id INTEGER UNIQUE GENERATED ALWAYS AS IDENTITY,
-		feature_id INTEGER,
+		feature_id INTEGER UNIQUE,
 		title VARCHAR(128),
 		text VARCHAR(512),
 		url VARCHAR(256),
@@ -163,12 +163,6 @@ func (s *Storage) GetBanners(ctx context.Context, bannersFilters model.BannersFi
 			banner.Tags = append(banner.Tags, tagId)
 		}
 		banners = append(banners, banner)
-	}
-	if bannersFilters.Offset > 0 && bannersFilters.Offset < len(banners) {
-		banners = banners[bannersFilters.Offset+1:]
-	}
-	if bannersFilters.Limit > 0 && bannersFilters.Limit < len(banners) {
-		banners = banners[:bannersFilters.Limit]
 	}
 	return banners, nil
 }

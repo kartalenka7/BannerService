@@ -27,8 +27,25 @@ func (s Service) CreateBanner(ctx context.Context, banner model.BannerCreate) (i
 }
 func (s Service) GetBanners(ctx context.Context,
 	bannersFilters model.BannersFilter) ([]model.BannerCreate, error) {
+
+	banners, err := s.storage.GetBanners(ctx, bannersFilters)
+	if err != nil {
+		return nil, err
+	}
+	if bannersFilters.Offset > 0 && bannersFilters.Offset < len(banners) {
+		banners = banners[bannersFilters.Offset+1:]
+	}
+	if bannersFilters.Limit > 0 && bannersFilters.Limit < len(banners) {
+		banners = banners[:bannersFilters.Limit]
+	}
+	return banners, nil
+}
+
+func (s Service) GetUserBanner(ctx context.Context, bannersFilters model.BannersFilter) (
+	[]model.BannerCreate, error) {
 	return s.storage.GetBanners(ctx, bannersFilters)
 }
+
 func (s Service) UpdateBanner(ctx context.Context, banner model.BannerUpdateRequest) (model.BannerCreate, error) {
 	return s.storage.UpdateBanner(ctx, banner)
 }

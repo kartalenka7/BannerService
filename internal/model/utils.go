@@ -45,6 +45,15 @@ func ParseQuery(r *http.Request) (BannersFilter, error) {
 		}
 	}
 
+	last := q.Get("use_last_revision")
+	if last != `` {
+		l, err := strconv.ParseBool(last)
+		if err != nil {
+			return bannerFilters, err
+		}
+		bannerFilters.UseLastRevision = l
+	}
+
 	return bannerFilters, nil
 }
 
