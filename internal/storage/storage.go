@@ -42,7 +42,8 @@ var (
 	createTagGroup = `INSERT INTO tags(tag_id, tags_group_id, banner_id)
 					  VALUES ($1, $2, $3)`
 
-	GetBanners = `SELECT DISTINCT b.banner_id, b.feature_id, b.tags_group_id, b.title, b.text, b.url, b.is_active
+	GetBanners = `SELECT DISTINCT b.banner_id, b.feature_id, b.tags_group_id, b.title,
+								  b.text, b.url, b.is_active
 				  FROM banners b
 				  JOIN tags t ON b.tags_group_id = t.tags_group_id
 				  WHERE ($1 = 0 OR b.feature_id = $1)
@@ -197,4 +198,8 @@ func (s *Storage) UpdateBanner(ctx context.Context, banner model.BannerUpdateReq
 
 func (s *Storage) DeleteBanner() {
 
+}
+
+func (s *Storage) Close() {
+	s.pgxPool.Close()
 }

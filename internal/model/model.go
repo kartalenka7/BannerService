@@ -13,29 +13,25 @@ type UserBannerRequest struct {
 	TagId           int `validate:"required"`
 	UseLastRevision bool
 }
-
+type BannerContent struct {
+	Title string `json:"title"`
+	Text  string `json:"text"`
+	URL   string `json:"url"`
+}
 type BannerUpdateRequest struct {
 	BannerId  int
-	Tags      []int `json:"tag_ids"`
-	FeatureId int   `json:"feature_id"`
-	Content   struct {
-		Title string `json:"title"`
-		Text  string `json:"text"`
-		URL   string `json:"url"`
-	} `json:"content"`
-	IsActive interface{} `json:"is_active"`
+	Tags      []int         `json:"tag_ids"`
+	FeatureId int           `json:"feature_id"`
+	Content   BannerContent `json:"content"`
+	IsActive  interface{}   `json:"is_active"`
 }
 
 type BannerCreate struct {
 	BannerId  int
-	Tags      []int `json:"tag_ids" validate:"required"`
-	FeatureId int   `json:"feature_id" validate:"required"`
-	Content   struct {
-		Title string `json:"title"`
-		Text  string `json:"text"`
-		URL   string `json:"url"`
-	} `json:"content" validate:"required"`
-	IsActive bool `json:"is_active"`
+	Tags      []int         `json:"tag_ids" validate:"required"`
+	FeatureId int           `json:"feature_id" validate:"required"`
+	Content   BannerContent `json:"content" validate:"required"`
+	IsActive  bool          `json:"is_active"`
 }
 
 type BannerCreatedResp struct {

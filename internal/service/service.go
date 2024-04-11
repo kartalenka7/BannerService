@@ -43,7 +43,19 @@ func (s Service) GetBanners(ctx context.Context,
 
 func (s Service) GetUserBanner(ctx context.Context, bannersFilters model.BannersFilter) (
 	[]model.BannerCreate, error) {
-	return s.storage.GetBanners(ctx, bannersFilters)
+	banner, err := s.storage.GetBanners(ctx, bannersFilters)
+	if err != nil {
+		return nil, err
+	}
+
+	// пользователи не могут получать выключенные баннеры
+	var userBanner []model.BannerCreate
+	for _, b := range banner {
+		if b.IsActive {
+			userBanner = append(userBanner, b)
+		}
+	}
+	return userBanner, nil
 }
 
 func (s Service) UpdateBanner(ctx context.Context, banner model.BannerUpdateRequest) (model.BannerCreate, error) {

@@ -28,8 +28,10 @@ func main() {
 	ctx := context.Background()
 	storage, err := storage.NewStorage(ctx, cfg.StoragePath, log)
 	if err != nil {
+		log.Error(err.Error())
 		return
 	}
+	defer storage.Close()
 
 	service := service.NewService(ctx, storage)
 
