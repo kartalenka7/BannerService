@@ -8,6 +8,12 @@ type BannersFilter struct {
 	UseLastRevision bool
 }
 
+type UserBannerRequest struct {
+	FeatureId       int `validate:"required"`
+	TagId           int `validate:"required"`
+	UseLastRevision bool
+}
+
 type BannerUpdateRequest struct {
 	BannerId  int
 	Tags      []int `json:"tag_ids"`
@@ -22,13 +28,13 @@ type BannerUpdateRequest struct {
 
 type BannerCreate struct {
 	BannerId  int
-	Tags      []int `json:"tag_ids"`
-	FeatureId int   `json:"feature_id"`
+	Tags      []int `json:"tag_ids" validate:"required"`
+	FeatureId int   `json:"feature_id" validate:"required"`
 	Content   struct {
 		Title string `json:"title"`
 		Text  string `json:"text"`
 		URL   string `json:"url"`
-	} `json:"content"`
+	} `json:"content" validate:"required"`
 	IsActive bool `json:"is_active"`
 }
 
@@ -39,6 +45,10 @@ type BannerCreatedResp struct {
 type AdminAuth struct {
 	Login    string `json:"login"`
 	Password string `json:"password"`
+}
+
+type Response struct {
+	Error string `json:"error"`
 }
 
 func (AdminAuth) Valid() {

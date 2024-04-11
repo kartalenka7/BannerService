@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
+	"github.com/go-playground/validator/v10"
 	"github.com/sirupsen/logrus"
 )
 
@@ -26,12 +27,8 @@ type Server struct {
 	config  config.Config
 }
 
-type Response struct {
-	Error string `json:"error"`
-}
-
 func ErrorResponse(err error, rw http.ResponseWriter, r *http.Request, status int) {
-	response := Response{
+	response := model.Response{
 		Error: err.Error(),
 	}
 	render.Status(r, status)
@@ -70,6 +67,20 @@ func (server Server) handlerGetUserBanner(rw http.ResponseWriter, r *http.Reques
 		ErrorResponse(err, rw, r, http.StatusBadRequest)
 		return
 	}
+
+	bannerRequest := model.UserBannerRequest{
+		FeatureId:       bannerFilters.FeatureId,
+		TagId:           bannerFilters.TagId,
+		UseLastRevision: bannerFilters.UseLastRevision,
+	}
+
+	if err := validator.New().Struct(bannerRequest); err != nil {
+		validateErr := err.(validator.ValidationErrors)
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(rw, r, model.ValidationError(validateErr))
+		return
+	}
+
 	bannersResponse, err := server.service.GetUserBanner(r.Context(), bannerFilters)
 	if err != nil {
 		ErrorResponse(err, rw, r, http.StatusInternalServerError)
@@ -79,6 +90,7 @@ func (server Server) handlerGetUserBanner(rw http.ResponseWriter, r *http.Reques
 		rw.WriteHeader(http.StatusNotFound)
 		return
 	}
+
 	render.JSON(rw, r, bannersResponse)
 }
 
@@ -109,6 +121,13 @@ func (server Server) handlerCreateBanner(rw http.ResponseWriter, r *http.Request
 	var err error
 	if err = render.DecodeJSON(r.Body, &banner); err != nil {
 		ErrorResponse(err, rw, r, http.StatusBadRequest)
+		return
+	}
+
+	if err := validator.New().Struct(banner); err != nil {
+		validateErr := err.(validator.ValidationErrors)
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(rw, r, model.ValidationError(validateErr))
 		return
 	}
 

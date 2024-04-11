@@ -17,7 +17,7 @@ func NewRouter(service ServiceInterface, log *logrus.Logger, cfg config.Config) 
 	}
 
 	router.Route("/banner", func(r chi.Router) {
-		r.Use(server.checkUserAuth)
+		r.Use(server.checkAdminAuth)
 		r.Get("/", server.handlerGetBanners)
 		r.Post("/", server.handlerCreateBanner)
 		r.Patch("/{id}", server.handlerUpdateBanner)
@@ -25,8 +25,11 @@ func NewRouter(service ServiceInterface, log *logrus.Logger, cfg config.Config) 
 	})
 
 	router.Group(func(r chi.Router) {
-		r.Post("/auth", server.handlerAuthentification)
+		r.Use(server.checkUserAuth)
 		r.Get("/user_banner", server.handlerGetUserBanner)
 	})
+
+	router.Post("/auth", server.handlerAuthentification)
+
 	return router
 }
