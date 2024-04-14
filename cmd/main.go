@@ -1,6 +1,7 @@
 package main
 
 import (
+	cache "avito/internal/cacheredis"
 	"avito/internal/config"
 	server "avito/internal/http-server"
 	"avito/internal/logger"
@@ -9,13 +10,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
-	// TODO: init logger
 	log := logger.InitLogger()
 
-	// TODO: init config
 	cfg, err := config.InitConfig()
 	if err != nil {
 		log.Error(err.Error())
@@ -24,7 +25,6 @@ func main() {
 
 	fmt.Println(cfg)
 
-	// TODO: init storage
 	ctx := context.Background()
 	storage, err := storage.NewStorage(ctx, cfg.StoragePath, log)
 	if err != nil {
@@ -33,13 +33,25 @@ func main() {
 	}
 	defer storage.Close()
 
-	service := service.NewService(ctx, storage)
+	clientRedis := redis.NewClient(&redis.Options{
+		Addr: cfg.RedisDSN,
+	})
 
-	// TODO: init router
+	cache := cache.NewRedis(clientRedis, log)
+	defer cache.Close()
+	log.Info("Redis запущен")
+	status := clientRedis.Ping(ctx)
+	if status.Err() != nil {
+		log.Error(status.Err().Error())
+		return
+	}
+	log.Info("Redis пингуется")
+
+	service := service.NewService(ctx, storage, cache)
+
 	log.Info("Инициализируем роутер")
 	r := server.NewRouter(service, log, cfg)
 
-	// TODO: run server
 	srv := &http.Server{
 		Addr:         cfg.ServerAddr,
 		ReadTimeout:  cfg.ServerTimeout,

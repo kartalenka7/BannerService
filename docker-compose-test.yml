@@ -1,0 +1,30 @@
+services:
+  redis:
+    container_name: redis_test
+    image: redis:alpine
+    ports:
+      - 6379:6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: always
+
+  postgres:
+    container_name: postgres
+    image: postgres:14.3-alpine
+    environment:
+      POSTGRES_DB: test_db
+      PGDATABASE: test_db
+      POSTGRES_USER: avito_user
+      PGUSER: avito_user
+      POSTGRES_PASSWORD: avito_pass
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready", "-d", "test_db" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports: 
+      - 5436:5432
+    restart: always

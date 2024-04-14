@@ -3,6 +3,8 @@ package storage
 import (
 	"avito/internal/model"
 	"context"
+	"errors"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -12,64 +14,79 @@ import (
 var (
 	// DROP TABLE IF EXISTS tags;
 	// DROP TABLE IF EXISTS banners;
+
 	createBannerTable = `
-	    DROP TABLE IF EXISTS tags;
+		DROP TABLE IF EXISTS groupTable;
 	    DROP TABLE IF EXISTS banners;
 		CREATE TABLE IF NOT EXISTS banners(
 		banner_id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-		tags_group_id INTEGER UNIQUE GENERATED ALWAYS AS IDENTITY,
-		feature_id INTEGER UNIQUE,
 		title VARCHAR(128),
 		text VARCHAR(512),
 		url VARCHAR(256),
 		is_active BOOLEAN NOT NULL DEFAULT FALSE
 	);`
 
-	createTagsTable = `
-		CREATE TABLE IF NOT EXISTS tags(
-		tag_id INTEGER ,
-		tags_group_id INTEGER,
+	createGroupTable = `
+		CREATE TABLE IF NOT EXISTS groupTable(
+		tag_id INTEGER,
+		feature_id INTEGER,
 		banner_id INTEGER,
-		CONSTRAINT fk_tags_group_id FOREIGN KEY (tags_group_id) 
-	    REFERENCES banners(tags_group_id),
-		PRIMARY KEY (tag_id, tags_group_id)
-	);`
+		PRIMARY KEY (tag_id, feature_id),
+		CONSTRAINT fk_banner_id FOREIGN KEY (banner_id) REFERENCES banners(banner_id));`
 
-	createBanner = `INSERT INTO banners(feature_id, title, text, url, is_active) 
-					VALUES ($1, $2, $3, $4, $5)
-					RETURNING banner_id, tags_group_id`
+	updateGroupTable = `
+	UPDATE groupTable
+		SET tag_id = $1,
+		    feature_id = CASE WHEN $3 != '' THEN $3
+			                ELSE feature_id END
+		WHERE banner_id = $2
+		RETURNING tag_id, feature_id`
 
-	createTagGroup = `INSERT INTO tags(tag_id, tags_group_id, banner_id)
-					  VALUES ($1, $2, $3)`
+	updateGroupFeature = `
+	UPDATE groupTable
+		SET feature_id = $1
+		WHERE banner_id = $2
+		RETURNING tag_id, feature_id`
 
-	GetBanners = `SELECT DISTINCT b.banner_id, b.feature_id, b.tags_group_id, b.title,
-								  b.text, b.url, b.is_active
-				  FROM banners b
-				  JOIN tags t ON b.tags_group_id = t.tags_group_id
-				  WHERE ($1 = 0 OR b.feature_id = $1)
-				  	AND ($2 = 0 OR t.tag_id = $2)`
-	GetTags = `SELECT tag_id
-			   FROM tags
-			   WHERE tags_group_id = $1`
+	deleteGroup = `
+	DELETE FROM groupTable WHERE banner_id = $1 AND tag_id NOT IN $2;`
+
+	delete = `
+	DELETE FROM groupTable WHERE banner_id = $1;
+	DELETE FROM banner WHERE banner_id = $1;`
+
+	createBanner = `INSERT INTO banners(title, text, url, is_active) 
+					VALUES ($1, $2, $3, $4)
+					RETURNING banner_id`
+
+	createGroup = `INSERT INTO groupTable(tag_id, feature_id, banner_id)
+					VALUES ($1, $2, $3)`
+
+	GetBanners = `SELECT DISTINCT banner_id, title, text, url, is_active
+				  FROM banners 
+				  WHERE banner_id = $1`
+
+	GetGroup = `SELECT banner_id, feature_id, tag_id
+			   FROM groupTable
+			   WHERE ($1 = 0 OR feature_id = $1)
+			   AND ($2 = 0 OR tag_id = $2)`
 
 	updateBanner = `
 		UPDATE banners
-		SET feature_id = COALESCE(NULLIF($1, 0), feature_id),
-			title = CASE WHEN $2 <> '' THEN $2 ELSE title END,
-			text = CASE WHEN $3 <> '' THEN $3 ELSE text END,
-			url = CASE WHEN $4 <> '' THEN $4 ELSE url END,
-			is_active = $5
-		WHERE banner_id = $6
-		RETURNING tags_group_id, feature_id, title, text, url, is_active;`
+		SET title = CASE WHEN $1 <> '' THEN $1 ELSE title END,
+			text = CASE WHEN $2 <> '' THEN $2 ELSE text END,
+			url = CASE WHEN $3 <> '' THEN $3 ELSE url END,
+			is_active = $4
+		WHERE banner_id = $5
+		RETURNING banner_id, title, text, url, is_active;`
 
 	updateBannerBool = `
 		UPDATE banners
-		SET feature_id = COALESCE(NULLIF($1, 0), feature_id),
-			title = CASE WHEN $2 <> '' THEN $2 ELSE title END,
-			text = CASE WHEN $3 <> '' THEN $3 ELSE text END,
-			url = CASE WHEN $4 <> '' THEN $4 ELSE url END
-		WHERE banner_id = $5
-		RETURNING tags_group_id, feature_id, title, text, url, is_active;`
+		SET title = CASE WHEN $1 <> '' THEN $1 ELSE title END,
+			text = CASE WHEN $2 <> '' THEN $2 ELSE text END,
+			url = CASE WHEN $3 <> '' THEN $3 ELSE url END
+		WHERE banner_id = $4
+		RETURNING  banner_id, title, text, url, is_active;`
 )
 
 type Storage struct {
@@ -92,7 +109,7 @@ func NewStorage(ctx context.Context, connString string,
 		return nil, err
 	}
 
-	if _, err = pgxPool.Exec(ctx, createTagsTable); err != nil {
+	if _, err = pgxPool.Exec(ctx, createGroupTable); err != nil {
 		log.Error(err.Error())
 		return nil, err
 	}
@@ -104,24 +121,32 @@ func NewStorage(ctx context.Context, connString string,
 
 func (s *Storage) CreateBanner(ctx context.Context, banner model.BannerCreate) (int, error) {
 	var bannerId int
-	var tagsGroupId int
-
-	row := s.pgxPool.QueryRow(ctx, createBanner, banner.FeatureId,
-		banner.Content.Title, banner.Content.Text, banner.Content.URL,
-		banner.IsActive)
-	err := row.Scan(&bannerId, &tagsGroupId)
+	s.log.Info("Запись баннера в бд")
+	tx, err := s.pgxPool.Begin(ctx)
 	if err != nil {
 		s.log.Error(err.Error())
 		return 0, err
 	}
 
+	row := tx.QueryRow(ctx, createBanner, banner.Content.Title,
+		banner.Content.Text, banner.Content.URL, banner.IsActive)
+	err = row.Scan(&bannerId)
+	if err != nil {
+		s.log.Error(err.Error())
+		tx.Rollback(ctx)
+		return 0, err
+	}
+
 	for _, tag := range banner.Tags {
-		_, err := s.pgxPool.Exec(ctx, createTagGroup, tag, tagsGroupId, bannerId)
+		_, err := tx.Exec(ctx, createGroup, tag, banner.FeatureId, bannerId)
 		if err != nil {
 			s.log.Error(err.Error())
+			tx.Rollback(ctx)
 			return 0, err
 		}
 	}
+
+	tx.Commit(ctx)
 
 	return bannerId, nil
 }
@@ -129,66 +154,117 @@ func (s *Storage) CreateBanner(ctx context.Context, banner model.BannerCreate) (
 func (s *Storage) GetBanners(ctx context.Context, bannersFilters model.BannersFilter) (
 	[]model.BannerCreate, error) {
 
-	rows, err := s.pgxPool.Query(ctx, GetBanners, bannersFilters.FeatureId,
+	s.log.Info("Получаем баннеры из бд")
+
+	var group model.Group
+
+	groupRows, err := s.pgxPool.Query(ctx, GetGroup, bannersFilters.FeatureId,
 		bannersFilters.TagId)
-	defer rows.Close()
+	defer groupRows.Close()
 	if err != nil {
 		s.log.Error(err.Error())
 		return nil, err
 	}
+
 	var banners []model.BannerCreate
-	for rows.Next() {
+	var groups []model.Group
+	mapId := make(map[string]int)
+
+	for groupRows.Next() {
+		err = groupRows.Scan(&group.BannerId, &group.FeatureId, &group.TagId)
+		if err != nil {
+			s.log.Error(err.Error())
+			return nil, err
+		}
+		groups = append(groups, group)
+		mapId[group.BannerId] = group.FeatureId
+	}
+
+	for bannerId, featureId := range mapId {
+
+		row := s.pgxPool.QueryRow(ctx, GetBanners, bannerId)
+
 		var banner model.BannerCreate
-		var tagsGroupId int
-		err = rows.Scan(&banner.BannerId, &banner.FeatureId, &tagsGroupId,
-			&banner.Content.Title, &banner.Content.Text, &banner.Content.URL,
-			&banner.IsActive)
+		err = row.Scan(&banner.BannerId, &banner.Content.Title, &banner.Content.Text,
+			&banner.Content.URL, &banner.IsActive)
 		if err != nil {
 			s.log.Error(err.Error())
 			return nil, err
 		}
 
-		tagsRows, err := s.pgxPool.Query(ctx, GetTags, &tagsGroupId)
-		defer tagsRows.Close()
+		for _, g := range groups {
+			if g.BannerId == bannerId {
+				banner.Tags = append(banner.Tags, g.TagId)
+			}
+		}
+
+		banner.FeatureId = featureId
 		if err != nil {
 			s.log.Error(err.Error())
 			return nil, err
-		}
-		for tagsRows.Next() {
-			var tagId int
-			err = tagsRows.Scan(&tagId)
-			if err != nil {
-				s.log.Error(err.Error())
-				return nil, err
-			}
-			banner.Tags = append(banner.Tags, tagId)
 		}
 		banners = append(banners, banner)
 	}
+
+	if len(banners) == 0 {
+		return nil, errors.New("Баннер не найден")
+	}
+
 	return banners, nil
 }
-
 func (s *Storage) UpdateBanner(ctx context.Context, banner model.BannerUpdateRequest) (
 	model.BannerCreate, error) {
 
 	var row pgx.Row
 
+	var updatedBanner model.BannerCreate
+	for _, tag := range banner.Tags {
+		row = s.pgxPool.QueryRow(ctx, updateGroupTable, tag, banner.BannerId, banner.FeatureId)
+
+		var tag string
+		var feature string
+
+		err := row.Scan(&tag, &feature)
+		if err != nil {
+			s.log.Error(err.Error())
+			return updatedBanner, err
+		}
+		tagId, _ := strconv.Atoi(tag)
+		updatedBanner.Tags = append(updatedBanner.Tags, tagId)
+
+		featureId, _ := strconv.Atoi(feature)
+		updatedBanner.FeatureId = featureId
+	}
+
+	updatedBanner.BannerId = banner.BannerId
+	if len(updatedBanner.Tags) != 0 {
+		_, err := s.pgxPool.Exec(ctx, deleteGroup, updatedBanner.BannerId, updatedBanner.Tags)
+		if err != nil {
+			s.log.Error(err.Error())
+			return updatedBanner, err
+		}
+	} else {
+		_, err := s.pgxPool.Exec(ctx, updateGroupFeature, banner.BannerId, banner.FeatureId)
+		if err != nil {
+			s.log.Error(err.Error())
+			return updatedBanner, err
+		}
+		updatedBanner.FeatureId = banner.FeatureId
+	}
+
 	if banner.IsActive == "true" || banner.IsActive == "false" {
 		IsActive, ok := banner.IsActive.(bool)
 		if ok {
-			row = s.pgxPool.QueryRow(ctx, updateBanner, banner.FeatureId,
+			row = s.pgxPool.QueryRow(ctx, updateBanner,
 				banner.Content.Title, banner.Content.Text, banner.Content.URL, IsActive,
 				banner.BannerId)
 		}
 	} else {
-		row = s.pgxPool.QueryRow(ctx, updateBannerBool, banner.FeatureId,
+		row = s.pgxPool.QueryRow(ctx, updateBannerBool,
 			banner.Content.Title, banner.Content.Text, banner.Content.URL, banner.BannerId)
 	}
 
-	var updatedBanner model.BannerCreate
-	var tagsGroupId int
-
-	err := row.Scan(&tagsGroupId, &updatedBanner.FeatureId, &updatedBanner.Content.Title,
+	err := row.Scan(&updatedBanner.BannerId, &updatedBanner.Content.Title,
 		&updatedBanner.Content.Text, &updatedBanner.Content.URL, &updatedBanner.IsActive)
 	if err != nil {
 		s.log.Error(err.Error())
@@ -196,8 +272,13 @@ func (s *Storage) UpdateBanner(ctx context.Context, banner model.BannerUpdateReq
 	return updatedBanner, err
 }
 
-func (s *Storage) DeleteBanner() {
-
+func (s *Storage) DeleteBanner(ctx context.Context, bannerId int) error {
+	s.log.Info("Удалить баннер из бд")
+	_, err := s.pgxPool.Exec(ctx, delete, bannerId)
+	if err != nil {
+		s.log.Error(err.Error())
+	}
+	return err
 }
 
 func (s *Storage) Close() {

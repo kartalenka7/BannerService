@@ -47,6 +47,8 @@ type Response struct {
 	Error string `json:"error"`
 }
 
-func (AdminAuth) Valid() {
-
+type Group struct {
+	TagId     int
+	FeatureId int
+	BannerId  string
 }

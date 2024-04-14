@@ -18,7 +18,7 @@ type ServiceInterface interface {
 	GetBanners(ctx context.Context, bannersFilters model.BannersFilter) ([]model.BannerCreate, error)
 	GetUserBanner(ctx context.Context, bannersFilters model.BannersFilter) ([]model.BannerCreate, error)
 	UpdateBanner(ctx context.Context, banner model.BannerUpdateRequest) (model.BannerCreate, error)
-	DeleteBanner()
+	DeleteBanner(ctx context.Context, bannerId int) error
 }
 
 type Server struct {
@@ -111,7 +111,6 @@ func (server Server) handlerGetBanners(rw http.ResponseWriter, r *http.Request) 
 		rw.WriteHeader(http.StatusNotFound)
 		return
 	}
-
 	render.JSON(rw, r, bannersResponse)
 }
 
@@ -170,4 +169,17 @@ func (server Server) handlerUpdateBanner(rw http.ResponseWriter, r *http.Request
 
 func (server Server) handlerDeleteBanner(rw http.ResponseWriter, r *http.Request) {
 
+	bannerId, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		ErrorResponse(err, rw, r, http.StatusBadRequest)
+		return
+	}
+
+	err = server.service.DeleteBanner(r.Context(), bannerId)
+	if err != nil {
+		ErrorResponse(err, rw, r, http.StatusInternalServerError)
+		return
+	}
+
+	rw.WriteHeader(http.StatusNoContent)
 }

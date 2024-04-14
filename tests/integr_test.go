@@ -1,20 +1,23 @@
 package tests
 
 import (
+	cache "avito/internal/cacheredis"
+	"avito/internal/config"
+	"avito/internal/logger"
 	"avito/internal/model"
 	"avito/internal/service"
-	mock "avito/mocks/storage"
+	"avito/internal/storage"
 	"context"
 	"testing"
 
+	"github.com/redis/go-redis/v9"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
 )
 
 func Test_GetBanner(t *testing.T) {
 	ctx := context.Background()
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+
 	type args struct {
 		bannerCreated model.BannerCreate
 		bannersFilter model.BannersFilter
@@ -26,13 +29,18 @@ func Test_GetBanner(t *testing.T) {
 	}
 	tests := []struct {
 		name           string
-		storage        *mock.MockStorer
 		args           args
+		log            *logrus.Logger
+		cfg            config.Config
 		expectedErrors errors
 	}{
 		{
-			name:    "Success",
-			storage: mock.NewMockStorer(ctrl),
+			name: "Success",
+			log:  logger.InitLogger(),
+			cfg: config.Config{
+				StoragePath: "postgres://avito_user:avito_pass@localhost:5436/test_db?sslmode=disable",
+				RedisDSN:    "localhost:6379",
+			},
 			args: args{
 				bannerCreated: model.BannerCreate{
 					FeatureId: 1,
@@ -57,16 +65,26 @@ func Test_GetBanner(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.storage.EXPECT().CreateBanner(ctx,
-				tt.args.bannerCreated).Return(tt.args.bannerId, tt.expectedErrors.createError)
-			tt.storage.EXPECT().GetBanners(ctx,
-				tt.args.bannersFilter).Return([]model.BannerCreate{tt.args.bannerCreated}, tt.expectedErrors.getError)
 
-			s := service.NewService(ctx, tt.storage)
+			storage, err := storage.NewStorage(ctx, tt.cfg.StoragePath, tt.log)
+			assert.NoError(t, err)
+
+			clientRedis := redis.NewClient(&redis.Options{
+				Addr: tt.cfg.RedisDSN,
+			})
+			cache := cache.NewRedis(clientRedis, tt.log)
+			defer cache.Close()
+
+			status := clientRedis.Ping(ctx)
+			assert.NoError(t, status.Err())
+
+			s := service.NewService(ctx, storage, cache)
+
 			id, err := s.CreateBanner(ctx, tt.args.bannerCreated)
-			assert.Equal(t, id, tt.args.bannerId)
+			assert.NotNil(t, id)
 			assert.Equal(t, err, tt.expectedErrors.createError)
 			if err == nil {
+				tt.args.bannerCreated.BannerId = id
 				banners, err := s.GetBanners(ctx, tt.args.bannersFilter)
 				assert.Equal(t, err, tt.expectedErrors.getError)
 				assert.Equal(t, banners, []model.BannerCreate{tt.args.bannerCreated})

@@ -7,12 +7,27 @@ services:
       RUN_ADDR: ":3000"
       LOG_LEVEL: INFO
       STORAGE_PATH: postgres://avito_user:avito_pass@postgres:5432/banner_db?sslmode=disable
+      REDIS_DSN: "redis:6379"
     restart: always
     ports:
     - 3000:3000
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+        
+  redis:
+    container_name: redis
+    image: redis:alpine
+    ports:
+    - 6379:6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: always
 
   postgres:
     container_name: postgres
