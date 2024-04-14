@@ -1,9 +1,12 @@
 package model
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/golang-jwt/jwt/v4"
 )
 
@@ -45,6 +48,15 @@ func ParseQuery(r *http.Request) (BannersFilter, error) {
 		}
 	}
 
+	last := q.Get("use_last_revision")
+	if last != `` {
+		l, err := strconv.ParseBool(last)
+		if err != nil {
+			return bannerFilters, err
+		}
+		bannerFilters.UseLastRevision = l
+	}
+
 	return bannerFilters, nil
 }
 
@@ -53,4 +65,21 @@ func GetToken(secret []byte) (string, error) {
 
 	tokenString, err := token.SignedString(secret)
 	return tokenString, err
+}
+
+func ValidationError(errs validator.ValidationErrors) Response {
+	var errMsgs []string
+	for _, err := range errs {
+		switch err.ActualTag() {
+		case "required":
+			errMsgs = append(errMsgs, fmt.Sprintf("field %s is requires", err.Field()))
+		case "url":
+			errMsgs = append(errMsgs, fmt.Sprintf("field %s is not valid URL", err.Field()))
+		default:
+			errMsgs = append(errMsgs, fmt.Sprintf("field %s is not valid", err.Field()))
+		}
+	}
+	return Response{
+		Error: strings.Join(errMsgs, ", "),
+	}
 }

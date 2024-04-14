@@ -6,7 +6,7 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-func (s Server) checkUserAuth(next http.Handler) http.Handler {
+func (s Server) checkAdminAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.log.Info("Проверяем токен админа")
 
@@ -17,7 +17,6 @@ func (s Server) checkUserAuth(next http.Handler) http.Handler {
 		}
 
 		jwtToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-			// Возвращаем секрет для проверки подписи
 			return []byte(s.config.AdminPassword), nil
 		})
 
@@ -28,6 +27,19 @@ func (s Server) checkUserAuth(next http.Handler) http.Handler {
 
 		if !jwtToken.Valid {
 			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s Server) checkUserAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.log.Info("Проверяем токен пользователя")
+
+		token := r.Header.Get("token")
+		if token == `` {
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		next.ServeHTTP(w, r)

@@ -3,3 +3,9 @@ banner-service-up: ## Create and run app containers
 
 banner-service-down: ## Stop and remove app containers
 	docker compose --file docker-compose.yml down -v
+
+## Test:
+test: ## Run tests
+	@docker-compose --file docker-compose-test.yml up -d --force-recreate
+	@go test -count=1 -v ./tests
+	@docker-compose --file docker-compose-test.yml down -v

@@ -4,20 +4,21 @@ import (
 	"avito/internal/config"
 	"avito/internal/model"
 	"context"
-	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
+	"github.com/go-playground/validator/v10"
 	"github.com/sirupsen/logrus"
 )
 
 type ServiceInterface interface {
 	CreateBanner(ctx context.Context, banner model.BannerCreate) (int, error)
 	GetBanners(ctx context.Context, bannersFilters model.BannersFilter) ([]model.BannerCreate, error)
+	GetUserBanner(ctx context.Context, bannersFilters model.BannersFilter) ([]model.BannerCreate, error)
 	UpdateBanner(ctx context.Context, banner model.BannerUpdateRequest) (model.BannerCreate, error)
-	DeleteBanner()
+	DeleteBanner(ctx context.Context, bannerId int) error
 }
 
 type Server struct {
@@ -26,12 +27,8 @@ type Server struct {
 	config  config.Config
 }
 
-type Response struct {
-	Error string `json:"error"`
-}
-
 func ErrorResponse(err error, rw http.ResponseWriter, r *http.Request, status int) {
-	response := Response{
+	response := model.Response{
 		Error: err.Error(),
 	}
 	render.Status(r, status)
@@ -63,6 +60,40 @@ func (server Server) handlerAuthentification(rw http.ResponseWriter, r *http.Req
 	rw.WriteHeader(http.StatusOK)
 }
 
+func (server Server) handlerGetUserBanner(rw http.ResponseWriter, r *http.Request) {
+	server.log.Info("Получаем баннер пользователя")
+	bannerFilters, err := model.ParseQuery(r)
+	if err != nil {
+		ErrorResponse(err, rw, r, http.StatusBadRequest)
+		return
+	}
+
+	bannerRequest := model.UserBannerRequest{
+		FeatureId:       bannerFilters.FeatureId,
+		TagId:           bannerFilters.TagId,
+		UseLastRevision: bannerFilters.UseLastRevision,
+	}
+
+	if err := validator.New().Struct(bannerRequest); err != nil {
+		validateErr := err.(validator.ValidationErrors)
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(rw, r, model.ValidationError(validateErr))
+		return
+	}
+
+	bannersResponse, err := server.service.GetUserBanner(r.Context(), bannerFilters)
+	if err != nil {
+		ErrorResponse(err, rw, r, http.StatusInternalServerError)
+		return
+	}
+	if len(bannersResponse) == 0 {
+		rw.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	render.JSON(rw, r, bannersResponse)
+}
+
 func (server Server) handlerGetBanners(rw http.ResponseWriter, r *http.Request) {
 	server.log.Info("Получаем все баннеры")
 	bannerFilters, err := model.ParseQuery(r)
@@ -77,10 +108,9 @@ func (server Server) handlerGetBanners(rw http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if len(bannersResponse) == 0 {
-		ErrorResponse(errors.New("Banners not found"), rw, r, http.StatusInternalServerError)
+		rw.WriteHeader(http.StatusNotFound)
 		return
 	}
-
 	render.JSON(rw, r, bannersResponse)
 }
 
@@ -93,6 +123,13 @@ func (server Server) handlerCreateBanner(rw http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if err := validator.New().Struct(banner); err != nil {
+		validateErr := err.(validator.ValidationErrors)
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(rw, r, model.ValidationError(validateErr))
+		return
+	}
+
 	var bannerResp model.BannerCreatedResp
 	bannerResp.BannerId, err = server.service.CreateBanner(r.Context(), banner)
 	if err != nil {
@@ -102,10 +139,6 @@ func (server Server) handlerCreateBanner(rw http.ResponseWriter, r *http.Request
 
 	render.Status(r, http.StatusCreated)
 	render.JSON(rw, r, bannerResp)
-}
-
-func (server Server) handlerGetUserBanner(rw http.ResponseWriter, r *http.Request) {
-
 }
 
 func (server Server) handlerUpdateBanner(rw http.ResponseWriter, r *http.Request) {
@@ -136,4 +169,17 @@ func (server Server) handlerUpdateBanner(rw http.ResponseWriter, r *http.Request
 
 func (server Server) handlerDeleteBanner(rw http.ResponseWriter, r *http.Request) {
 
+	bannerId, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		ErrorResponse(err, rw, r, http.StatusBadRequest)
+		return
+	}
+
+	err = server.service.DeleteBanner(r.Context(), bannerId)
+	if err != nil {
+		ErrorResponse(err, rw, r, http.StatusInternalServerError)
+		return
+	}
+
+	rw.WriteHeader(http.StatusNoContent)
 }
