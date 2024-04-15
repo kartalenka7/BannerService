@@ -12,12 +12,7 @@ import (
 )
 
 var (
-	// DROP TABLE IF EXISTS tags;
-	// DROP TABLE IF EXISTS banners;
-
 	createBannerTable = `
-		DROP TABLE IF EXISTS groupTable;
-	    DROP TABLE IF EXISTS banners;
 		CREATE TABLE IF NOT EXISTS banners(
 		banner_id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
 		title VARCHAR(128),
@@ -96,7 +91,7 @@ type Storage struct {
 
 func NewStorage(ctx context.Context, connString string,
 	log *logrus.Logger) (*Storage, error) {
-	//TODO: add logging
+
 	log.Info("Запускаем инициализацию хранилища")
 	pgxPool, err := pgxpool.New(ctx, connString)
 	if err != nil {

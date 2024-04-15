@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/golang-jwt/jwt/v4"
@@ -62,6 +63,9 @@ func ParseQuery(r *http.Request) (BannersFilter, error) {
 
 func GetToken(secret []byte) (string, error) {
 	token := jwt.New(jwt.SigningMethodHS256)
+
+	claims := token.Claims.(jwt.MapClaims)
+	claims["exp"] = time.Now().Add(time.Duration(time.Hour * 24)).Unix()
 
 	tokenString, err := token.SignedString(secret)
 	return tokenString, err
