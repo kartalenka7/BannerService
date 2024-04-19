@@ -1,10 +1,10 @@
 package server
 
 import (
-	"avito/internal/config"
 	"avito/internal/model"
 	"context"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -24,7 +24,6 @@ type ServiceInterface interface {
 type Server struct {
 	service ServiceInterface
 	log     *logrus.Logger
-	config  config.Config
 }
 
 func ErrorResponse(err error, rw http.ResponseWriter, r *http.Request, status int) {
@@ -47,9 +46,10 @@ func (server Server) handlerAuthentification(rw http.ResponseWriter, r *http.Req
 
 	var secret []byte
 
-	if admin.Login == server.config.AdminLogin &&
-		admin.Password == server.config.AdminPassword {
-		secret = []byte(server.config.AdminPassword)
+	password := os.Getenv("HTTP_SERVER_PASSWORD")
+	if admin.Login == os.Getenv("HTTP_SERVER_LOGIN") &&
+		admin.Password == password {
+		secret = []byte(password)
 	}
 	token, err := model.GetToken(secret)
 	if err != nil {

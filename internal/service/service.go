@@ -3,6 +3,7 @@ package service
 import (
 	"avito/internal/model"
 	"context"
+	"fmt"
 )
 
 type Storer interface {
@@ -44,17 +45,19 @@ func (s Service) CreateBanner(ctx context.Context, banner model.BannerCreate) (i
 func (s Service) GetBanners(ctx context.Context,
 	bannersFilters model.BannersFilter) ([]model.BannerCreate, error) {
 
-	banners, err := s.cache.GetBannerCache(ctx, bannersFilters)
-	if len(banners) != 0 {
-		return banners, err
+	banners, _ := s.cache.GetBannerCache(ctx, bannersFilters)
+
+	var err error
+	if len(banners) == 0 {
+		banners, err = s.storage.GetBanners(ctx, bannersFilters)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	banners, err = s.storage.GetBanners(ctx, bannersFilters)
-	if err != nil {
-		return nil, err
-	}
+	fmt.Println(bannersFilters.Limit, bannersFilters.Offset)
 	if bannersFilters.Offset > 0 && bannersFilters.Offset < len(banners) {
-		banners = banners[bannersFilters.Offset+1:]
+		banners = banners[bannersFilters.Offset:]
 	}
 	if bannersFilters.Limit > 0 && bannersFilters.Limit < len(banners) {
 		banners = banners[:bannersFilters.Limit]

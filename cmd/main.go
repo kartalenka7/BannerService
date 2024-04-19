@@ -2,31 +2,25 @@ package main
 
 import (
 	cache "avito/internal/cacheredis"
-	"avito/internal/config"
 	server "avito/internal/http-server"
 	"avito/internal/logger"
 	"avito/internal/service"
 	"avito/internal/storage"
 	"context"
-	"fmt"
 	"net/http"
+	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 )
 
 func main() {
 	log := logger.InitLogger()
 
-	cfg, err := config.InitConfig()
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	fmt.Println(cfg)
+	godotenv.Load()
 
 	ctx := context.Background()
-	storage, err := storage.NewStorage(ctx, cfg.StoragePath, log)
+	storage, err := storage.NewStorage(ctx, os.Getenv("STORAGE_PATH"), log)
 	if err != nil {
 		log.Error(err.Error())
 		return
@@ -34,7 +28,7 @@ func main() {
 	defer storage.Close()
 
 	clientRedis := redis.NewClient(&redis.Options{
-		Addr: cfg.RedisDSN,
+		Addr: os.Getenv("REDIS_DSN"),
 	})
 
 	cache := cache.NewRedis(clientRedis, log)
@@ -50,13 +44,13 @@ func main() {
 	service := service.NewService(ctx, storage, cache)
 
 	log.Info("Инициализируем роутер")
-	r := server.NewRouter(service, log, cfg)
+	r := server.NewRouter(service, log)
 
 	srv := &http.Server{
-		Addr:         cfg.ServerAddr,
-		ReadTimeout:  cfg.ServerTimeout,
-		WriteTimeout: cfg.ServerTimeout,
-		Handler:      r,
+		Addr: os.Getenv("RUN_ADDR"),
+		// ReadTimeout:  cfg.ServerTimeout,
+		// WriteTimeout: cfg.ServerTimeout,
+		Handler: r,
 	}
 	log.Info("Запускаем сервер")
 	if err := srv.ListenAndServe(); err != nil {
