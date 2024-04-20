@@ -4,7 +4,6 @@ import (
 	"avito/internal/model"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -58,7 +57,7 @@ func (r *Redis) GetBannerCache(ctx context.Context,
 	var err error
 	var banners []model.BannerCreate
 
-	var idList []string
+	idList := make(map[string]struct{})
 
 	r.log.Info("Получаем баннеры из кэша")
 
@@ -70,7 +69,7 @@ func (r *Redis) GetBannerCache(ctx context.Context,
 			return nil, err
 		}
 
-		idList = append(idList, bannerId)
+		idList[bannerId] = struct{}{}
 	} else if bannersFilters.FeatureId != 0 {
 
 		bannerIds, err := r.client.HGetAll(ctx,
@@ -81,7 +80,7 @@ func (r *Redis) GetBannerCache(ctx context.Context,
 		}
 
 		for _, id := range bannerIds {
-			idList = append(idList, id)
+			idList[id] = struct{}{}
 		}
 
 	} else if bannersFilters.TagId != 0 {
@@ -93,7 +92,7 @@ func (r *Redis) GetBannerCache(ctx context.Context,
 		}
 
 		for _, id := range bannerIds {
-			idList = append(idList, id)
+			idList[id] = struct{}{}
 		}
 	} else {
 		bannersJSON, err := r.client.HGetAll(ctx, "mybanner").Result()
@@ -110,14 +109,11 @@ func (r *Redis) GetBannerCache(ctx context.Context,
 			}
 			banners = append(banners, bannerUnmarshalled)
 		}
-		if len(banners) == 0 {
-			//TODO вынести ошибку в model
-			return nil, errors.New("Не найдено")
-		}
+
 		return banners, nil
 	}
 
-	for _, b := range idList {
+	for b := range idList {
 		var bannerUnmarshalled model.BannerCreate
 		bannerJSON, err := r.client.HGet(ctx, "mybanner", b).Result()
 		if err != nil {
@@ -130,11 +126,6 @@ func (r *Redis) GetBannerCache(ctx context.Context,
 		}
 		bannerUnmarshalled.BannerId, _ = strconv.Atoi(b)
 		banners = append(banners, bannerUnmarshalled)
-	}
-
-	if len(banners) == 0 {
-		//TODO вынести ошибку в model
-		return nil, errors.New("Не найдено")
 	}
 
 	return banners, nil

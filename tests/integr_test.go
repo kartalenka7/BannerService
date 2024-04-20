@@ -2,14 +2,15 @@ package tests
 
 import (
 	cache "avito/internal/cacheredis"
-	"avito/internal/config"
 	"avito/internal/logger"
 	"avito/internal/model"
 	"avito/internal/service"
 	"avito/internal/storage"
 	"context"
+	"os"
 	"testing"
 
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -17,6 +18,7 @@ import (
 
 func Test_GetBanner(t *testing.T) {
 	ctx := context.Background()
+	godotenv.Load()
 
 	type args struct {
 		bannerCreated model.BannerCreate
@@ -31,16 +33,11 @@ func Test_GetBanner(t *testing.T) {
 		name           string
 		args           args
 		log            *logrus.Logger
-		cfg            config.Config
 		expectedErrors errors
 	}{
 		{
 			name: "Success",
 			log:  logger.InitLogger(),
-			cfg: config.Config{
-				StoragePath: "postgres://avito_user:avito_pass@localhost:5436/test_db?sslmode=disable",
-				RedisDSN:    "localhost:6379",
-			},
 			args: args{
 				bannerCreated: model.BannerCreate{
 					FeatureId: 1,
@@ -66,11 +63,11 @@ func Test_GetBanner(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			storage, err := storage.NewStorage(ctx, tt.cfg.StoragePath, tt.log)
+			storage, err := storage.NewStorage(ctx, os.Getenv("STORAGE_PATH"), tt.log)
 			assert.NoError(t, err)
 
 			clientRedis := redis.NewClient(&redis.Options{
-				Addr: tt.cfg.RedisDSN,
+				Addr: os.Getenv("REDIS_DSN"),
 			})
 			cache := cache.NewRedis(clientRedis, tt.log)
 			defer cache.Close()

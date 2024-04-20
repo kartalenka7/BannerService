@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -18,7 +19,7 @@ func (s Server) checkAdminAuth(next http.Handler) http.Handler {
 		}
 
 		jwtToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-			return []byte(s.config.AdminPassword), nil
+			return []byte(os.Getenv("HTTP_SERVER_PASSWORD")), nil
 		})
 
 		if err != nil {

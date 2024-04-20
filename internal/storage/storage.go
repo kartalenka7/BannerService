@@ -3,7 +3,6 @@ package storage
 import (
 	"avito/internal/model"
 	"context"
-	"errors"
 	"strconv"
 
 	"github.com/jackc/pgx/v5"
@@ -43,8 +42,7 @@ var (
 		WHERE banner_id = $2
 		RETURNING tag_id, feature_id`
 
-	deleteGroup = `
-	DELETE FROM groupTable WHERE banner_id = $1 AND tag_id NOT IN $2;`
+	deleteGroup = `DELETE FROM groupTable WHERE banner_id = $1 AND tag_id NOT IN $2;`
 
 	delete = `
 	DELETE FROM groupTable WHERE banner_id = $1;
@@ -141,7 +139,12 @@ func (s *Storage) CreateBanner(ctx context.Context, banner model.BannerCreate) (
 		}
 	}
 
-	tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		s.log.Error(err.Error())
+		tx.Rollback(ctx)
+		return 0, err
+	}
 
 	return bannerId, nil
 }
@@ -199,10 +202,6 @@ func (s *Storage) GetBanners(ctx context.Context, bannersFilters model.BannersFi
 			return nil, err
 		}
 		banners = append(banners, banner)
-	}
-
-	if len(banners) == 0 {
-		return nil, errors.New("Баннер не найден")
 	}
 
 	return banners, nil

@@ -12,7 +12,7 @@ services:
     restart: always
 
   postgres:
-    container_name: postgres
+    container_name: postgres_test
     image: postgres:14.3-alpine
     environment:
       POSTGRES_DB: test_db
