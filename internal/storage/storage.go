@@ -44,9 +44,8 @@ var (
 
 	deleteGroup = `DELETE FROM groupTable WHERE banner_id = $1 AND tag_id NOT IN $2;`
 
-	delete = `
-	DELETE FROM groupTable WHERE banner_id = $1;
-	DELETE FROM banner WHERE banner_id = $1;`
+	deleteHandlerGroup  = `DELETE FROM groupTable WHERE banner_id = $1;`
+	deleteHandlerBanner = `DELETE FROM banners WHERE banner_id = $1;`
 
 	createBanner = `INSERT INTO banners(title, text, url, is_active) 
 					VALUES ($1, $2, $3, $4)
@@ -268,7 +267,12 @@ func (s *Storage) UpdateBanner(ctx context.Context, banner model.BannerUpdateReq
 
 func (s *Storage) DeleteBanner(ctx context.Context, bannerId int) error {
 	s.log.Info("Удалить баннер из бд")
-	_, err := s.pgxPool.Exec(ctx, delete, bannerId)
+	_, err := s.pgxPool.Exec(ctx, deleteHandlerGroup, bannerId)
+	if err != nil {
+		s.log.Error(err.Error())
+		return err
+	}
+	_, err = s.pgxPool.Exec(ctx, deleteHandlerBanner, bannerId)
 	if err != nil {
 		s.log.Error(err.Error())
 	}
