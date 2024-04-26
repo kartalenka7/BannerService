@@ -23,6 +23,7 @@ func (s Server) checkAdminAuth(next http.Handler) http.Handler {
 		})
 
 		if err != nil {
+			s.log.Error(err.Error())
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

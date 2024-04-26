@@ -9,10 +9,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func InitLogger() *logrus.Logger {
+func InitLogger(level string) *logrus.Logger {
 	log := logrus.New()
 	log.SetReportCaller(true)
 	log.Out = os.Stdout
+	switch level {
+	case "error":
+		log.Level = logrus.ErrorLevel
+	default:
+		log.Level = logrus.InfoLevel
+	}
+
 	log.Formatter = &logrus.TextFormatter{
 		CallerPrettyfier: func(frame *runtime.Frame) (function string, file string) {
 			filename := path.Base(frame.File)

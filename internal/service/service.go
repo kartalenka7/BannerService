@@ -3,7 +3,6 @@ package service
 import (
 	"avito/internal/model"
 	"context"
-	"fmt"
 )
 
 type Storer interface {
@@ -55,7 +54,6 @@ func (s Service) GetBanners(ctx context.Context,
 		}
 	}
 
-	fmt.Println(bannersFilters.Limit, bannersFilters.Offset)
 	if bannersFilters.Offset > 0 && bannersFilters.Offset < len(banners) {
 		banners = banners[bannersFilters.Offset:]
 	}

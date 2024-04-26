@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,6 +11,16 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/golang-jwt/jwt/v4"
 )
+
+var rnd *rand.Rand
+
+func init() {
+	rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
+func RandomTestInt() int {
+	return rnd.Intn(256)
+}
 
 func ParseQuery(r *http.Request) (BannersFilter, error) {
 	var bannerFilters BannersFilter
