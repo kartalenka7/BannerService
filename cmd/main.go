@@ -15,9 +15,9 @@ import (
 )
 
 func main() {
-	log := logger.InitLogger()
-
 	godotenv.Load()
+
+	log := logger.InitLogger(os.Getenv("LOGGER_LEVEL"))
 
 	ctx := context.Background()
 	storage, err := storage.NewStorage(ctx, os.Getenv("STORAGE_PATH"), log)
